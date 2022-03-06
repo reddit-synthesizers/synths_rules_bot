@@ -5,9 +5,9 @@ This bot enforces r/synthesizers Rule 5:
 ```
 Leave a Comment on Link/Photo/Video Posts
 
-Link, photo, and video posts must include a meaningful comment by the OP. “Here is a track I made” 
-or "look at my new synth" is not sufficient since the point is to encourage discussion. 
-Posts lacking a comment will be removed at the moderators discretion.
+Link, photo, and video posts must include a meaningful comment by the OP. 
+“Here is a track I made” or "look at my new synth" is not sufficient since the point is 
+to encourage discussion. Posts lacking a comment will be removed at the moderators discretion.
 ```
 
 By default, it will monitor the (up to) 100 newest submissions for link submissions where the OP did not leave a meaningful comment. 
