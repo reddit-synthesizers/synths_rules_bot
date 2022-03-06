@@ -1,0 +1,5 @@
+Hi /u/$author, I just wanted to remind you to leave a thoughtful comment on your post (see rule 5 in the sidebar).
+
+If you do not comment within $minutes minutes, then your post will automatically be removed.
+
+You’re not in trouble and everyone gets this reminder. If you’ve already commented then no further action is necessary.
