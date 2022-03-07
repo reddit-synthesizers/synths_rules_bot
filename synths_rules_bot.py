@@ -13,8 +13,8 @@ class SynthsRulesBot:
         self.warning_template = Template(self.read_text_file('warning.txt'))
         self.removal_template = Template(self.read_text_file('removal.txt'))
 
-        self.reddit = praw.Reddit('SynthRulesBot')
-        subreddit = self.reddit.subreddit('SynthesizersSandbox')
+        reddit = praw.Reddit('SynthRulesBot')
+        subreddit = reddit.subreddit('SynthesizersSandbox')
 
         for submission in subreddit.new(limit=100):
             self.process_submission(submission)
