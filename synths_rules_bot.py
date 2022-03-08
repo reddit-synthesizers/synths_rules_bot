@@ -4,17 +4,19 @@ import threading
 
 from string import Template
 
+DEFAULT_SUBREDDIT_NAME = 'SynthesizersSandbox'
+
 MINUTES_TO_WARN = 5 # number of minutes before warning the user
 MINUTES_TO_REMOVE = 60 # number of minutes before removing the post if the user has not commented
 MIN_COMMENTERS_TO_KEEP = 5 # number of unique commenters to keep the post if the user has not commented
 
 class SynthsRulesBot:
-    def __init__(self):
-        self.warning_template = Template(self.read_text_file('warning.txt'))
-        self.removal_template = Template(self.read_text_file('removal.txt'))
+    def __init__(self, subreddit_name=DEFAULT_SUBREDDIT_NAME):
+        self.warning_template = Template(self.read_text_file('rule5-warning.txt'))
+        self.removal_template = Template(self.read_text_file('rule5-removal.txt'))
 
-        reddit = praw.Reddit('SynthRulesBot')
-        subreddit = reddit.subreddit('SynthesizersSandbox')
+        self.reddit = praw.Reddit('SynthRulesBot')
+        subreddit = self.reddit.subreddit(subreddit_name)
 
         for submission in subreddit.new(limit=100):
             self.process_submission(submission)
@@ -27,8 +29,8 @@ class SynthsRulesBot:
 
             if age >= MINUTES_TO_REMOVE and not author_commented:
                 target = self.remove_worker
-            elif age >= MINUTES_TO_REMOVE and author_commented:
-                target = self.cleanup_worker(submission)
+            elif age >= MINUTES_TO_WARN and author_commented:
+                target = self.cleanup_worker
             elif age >= MINUTES_TO_WARN and not author_commented:
                 target = self.warning_worker
 
@@ -48,7 +50,7 @@ class SynthsRulesBot:
             self.log('Warned', submission)
 
     def remove_worker(self, submission):
-        if self.get_unique_commenters_len() >= MIN_COMMENTERS_TO_KEEP:
+        if self.get_unique_commenters_len(submission) >= MIN_COMMENTERS_TO_KEEP:
             self.log('Submission appears engaging, will not remove', submission)
         else:
             submission.mod.remove(mod_note='Rule 5: Author did not comment')
@@ -98,7 +100,7 @@ class SynthsRulesBot:
         mod_commment = None
 
         for comment in submission.comments:
-            if comment.author.name == 'SynthesizersBot' and comment.distinguished:
+            if comment.author.name == self.reddit.user.me() and comment.distinguished:
                 mod_commment = comment
                 break
         return mod_commment
@@ -129,4 +131,5 @@ if __name__ == '__main__':
     SynthsRulesBot()
 
 def lambda_handler(event, context):
-    SynthsRulesBot()
+    subreddit_name = event['subreddit_name'] if 'subreddit_name' in event else DEFAULT_SUBREDDIT_NAME
+    SynthsRulesBot(subreddit_name=subreddit_name)
