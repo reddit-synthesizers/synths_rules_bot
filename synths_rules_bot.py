@@ -4,8 +4,8 @@ import threading
 
 from string import Template
 
-MINUTES_TO_WARN = 1 # number of minutes before warning the user
-MINUTES_TO_REMOVE = 5 # number of minutes before removing the post if the user has not commented
+MINUTES_TO_WARN = 5 # number of minutes before warning the user
+MINUTES_TO_REMOVE = 60 # number of minutes before removing the post if the user has not commented
 MIN_COMMENTERS_TO_KEEP = 5 # number of unique commenters to keep the post if the user has not commented
 
 class SynthsRulesBot:
