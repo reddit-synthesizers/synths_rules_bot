@@ -1,11 +1,12 @@
 import praw
 import datetime
+import os
 import threading
 
 from string import Template
 
-DEFAULT_SUBREDDIT_NAME = 'SynthesizersSandbox'
-
+DEFAULT_SUBREDDIT_NAME = 'synthesizers'
+    
 MINUTES_TO_WARN = 5 # number of minutes before warning the user
 MINUTES_TO_REMOVE = 60 # number of minutes before removing the post if the user has not commented
 MIN_COMMENTERS_TO_KEEP = 5 # number of unique commenters to keep the post if the user has not commented
@@ -18,7 +19,7 @@ class SynthsRulesBot:
         self.reddit = praw.Reddit('SynthRulesBot')
         subreddit = self.reddit.subreddit(subreddit_name)
 
-        for submission in subreddit.new(limit=100):
+        for submission in subreddit.new(limit=25):
             self.process_submission(submission)
 
     def process_submission(self, submission):
@@ -39,13 +40,13 @@ class SynthsRulesBot:
                 thread.start()
 
     def warning_worker(self, submission):
-        if not self.find_mod_comment(submission):
+        if not self.has_bot_comment(submission):
             messaage = self.warning_template.substitute(
                 author=submission.author.name, minutes=MINUTES_TO_REMOVE)
             
-            mod_comment = submission.reply(messaage)
-            mod_comment.mod.distinguish(sticky=True)
-            mod_comment.mod.ignore_reports()
+            bot_comment = submission.reply(messaage)
+            bot_comment.mod.distinguish(sticky=True)
+            bot_comment.mod.ignore_reports()
             
             self.log('Warned', submission)
 
@@ -62,10 +63,12 @@ class SynthsRulesBot:
             self.log('Removed', submission);
 
     def cleanup_worker(self, submission):
-        mod_comment = self.find_mod_comment(submission)
-        if not mod_comment == None and not mod_comment.removed:
-            self.log('No longer actionable, cleaning up mod comments', submission)
-            mod_comment.mod.remove(mod_note='Rule 5: Author commented')
+        bot_comments = self.find_bot_comments(submission)
+
+        for comment in bot_comments:
+            if not comment.removed:
+                self.log('No longer actionable. Cleaning up bot comments', submission)
+                comment.mod.remove(mod_note='Rule 5: Author commented')
 
     # 1. Not a self post
     # 2. Not locked
@@ -96,14 +99,17 @@ class SynthsRulesBot:
         return False
 
     # Find the bot's moderation comment
-    def find_mod_comment(self, submission):
-        mod_commment = None
+    def find_bot_comments(self, submission):
+        bot_commments = list()
 
         for comment in submission.comments:
-            if comment.author.name == self.reddit.user.me() and comment.distinguished:
-                mod_commment = comment
-                break
-        return mod_commment
+            if comment.author.name == self.reddit.user.me():
+                bot_commments.append(comment)
+
+        return bot_commments
+
+    def has_bot_comment(self, submission):
+        return self.find_bot_comments(submission).__len__() > 0
 
     def get_unique_commenters_len(self, submission):
         unique = set()
@@ -131,5 +137,5 @@ if __name__ == '__main__':
     SynthsRulesBot()
 
 def lambda_handler(event, context):
-    subreddit_name = event['subreddit_name'] if 'subreddit_name' in event else DEFAULT_SUBREDDIT_NAME
+    subreddit_name = os.environ['subreddit_name'] if 'subreddit_name' in os.environ else DEFAULT_SUBREDDIT_NAME
     SynthsRulesBot(subreddit_name=subreddit_name)
