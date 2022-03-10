@@ -54,7 +54,7 @@ class SynthsRulesBot:
         if self.get_unique_commenters_len(submission) >= MIN_COMMENTERS_TO_KEEP:
             self.log('Submission appears engaging, will not remove', submission)
         else:
-            submission.mod.remove(mod_note='Rule 5: Author did not comment')
+            submission.mod.remove(mod_note='Rule 5: OP did not comment, removed submission')
             
             message = self.removal_template.substitute(
                 author=submission.author.name, minutes=MINUTES_TO_REMOVE)
@@ -68,7 +68,7 @@ class SynthsRulesBot:
         for comment in bot_comments:
             if not comment.removed:
                 self.log('No longer actionable. Cleaning up bot comments', submission)
-                comment.mod.remove(mod_note='Rule 5: Author commented')
+                comment.mod.remove(mod_note='Rule 5: OP commented, removed warning')
 
     # 1. Not a self post
     # 2. Not locked
@@ -76,6 +76,7 @@ class SynthsRulesBot:
     # 4. Not created by AutoModerator
     def is_submission_actionable(self, submission):
         return (not submission.is_self
+            and not submission.approved
             and not submission.locked
             and not submission.distinguished
             and not submission.author.name == 'AutoModerator')
@@ -90,18 +91,23 @@ class SynthsRulesBot:
 
     # Did the OP leave a comment to the thread?
     def did_author_comment(self, submission):
+        author_commented = False
+
+        submission.comments.replace_more(limit=None)
         flattened_comments = submission.comments.list()
 
         for comment in flattened_comments:
             if comment.is_submitter:
-                return True
+                author_commented = True
+                break 
 
-        return False
+        return author_commented
 
     # Find the bot's moderation comment
     def find_bot_comments(self, submission):
         bot_commments = list()
 
+        submission.comments.replace_more(limit=None)
         for comment in submission.comments:
             if comment.author.name == self.reddit.user.me():
                 bot_commments.append(comment)
@@ -114,6 +120,7 @@ class SynthsRulesBot:
     def get_unique_commenters_len(self, submission):
         unique = set()
 
+        submission.comments.replace_more(limit=None)
         for comment in submission.comments:
             unique.add(comment.author)
 
