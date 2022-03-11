@@ -105,14 +105,14 @@ class SynthsRulesBot:
 
     # Find the bot's moderation comment
     def find_bot_comments(self, submission):
-        bot_commments = list()
+        bot_comments = list()
 
         submission.comments.replace_more(limit=None)
         for comment in submission.comments:
             if comment.author.name == self.reddit.user.me():
-                bot_commments.append(comment)
+                bot_comments.append(comment)
 
-        return bot_commments
+        return bot_comments
 
     def has_bot_comment(self, submission):
         return self.find_bot_comments(submission).__len__() > 0
@@ -137,7 +137,8 @@ class SynthsRulesBot:
 
     def log(self, action, submission):
         now = datetime.datetime.now()
-        print(f'[{now}] {action}: \'{submission.title}\'')
+        name = type(self).__name__
+        print(f'[{name}][{now}] {action}: \'{submission.title}\' ({submission.id})')
 
 
 if __name__ == '__main__':
