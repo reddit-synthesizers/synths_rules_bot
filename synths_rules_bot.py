@@ -7,12 +7,11 @@ from string import Template
 
 DEFAULT_SUBREDDIT_NAME = 'synthesizers'
 
-# number of minutes before warning the user
-MINUTES_TO_WARN = 5
-# number of minutes before removing the post if the user has not commented
-MINUTES_TO_REMOVE = 60
-# number of unique commenters to keep the post if the user has not commented
-MIN_COMMENTERS_TO_KEEP = 5
+
+MINUTES_TO_WARN = 5  # number of minutes before warning the user
+MINUTES_TO_REMOVE = 60  # number of minutes before removing the post if the user has not commented
+MIN_COMMENTERS_TO_KEEP = 5  # number of unique commenters to keep the post if the user has not commented
+OLDEST_SUBMISSION_AGE_TO_PROCESS = 90  # depending on how often the bot runs, this can optimize the # of API calls
 
 
 class SynthsRulesBot:
@@ -34,6 +33,9 @@ class SynthsRulesBot:
             author_commented = self.did_author_comment(submission)
             target = None
 
+            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS:  # optimization
+                return
+
             if age >= MINUTES_TO_REMOVE and not author_commented:
                 target = self.remove_worker
             elif age >= MINUTES_TO_WARN and author_commented:
@@ -41,7 +43,7 @@ class SynthsRulesBot:
             elif age >= MINUTES_TO_WARN and not author_commented:
                 target = self.warning_worker
 
-            if target != None:
+            if target is not None:
                 thread = threading.Thread(target=target, args=(submission,))
                 thread.start()
 
