@@ -29,11 +29,12 @@ class SynthsRulesBot:
     def process_submission(self, submission):
         if self.is_submission_actionable(submission):
             age = self.get_submission_age(submission)
+
+            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS: # optimization
+                return
+
             author_commented = self.did_author_comment(submission)
             target = None
-
-            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS:  # optimization
-                return
 
             if age >= MINUTES_TO_REMOVE and not author_commented:
                 target = self.remove_worker
@@ -75,10 +76,8 @@ class SynthsRulesBot:
 
         for comment in bot_comments:
             if not comment.removed:
-                self.log(
-                    'No longer actionable. Cleaning up bot comments', submission)
-                comment.mod.remove(
-                    mod_note='Rule 5: OP commented, removed warning')
+                comment.mod.remove(mod_note='Rule 5: OP commented, removed warning')
+                self.log('No longer actionable. Cleaned up bot comments', submission)
 
     # 1. Not a self post
     # 2. Not locked
