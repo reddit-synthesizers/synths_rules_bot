@@ -60,7 +60,7 @@ class SynthsRulesBot:
 
     def remove_worker(self, submission):
         if self.get_unique_commenters_len(submission) >= MIN_COMMENTERS_TO_KEEP:
-            self.log('Submission appears engaging, will not remove', submission)
+            self.log('Ignored', submission)
         else:
             submission.mod.remove(
                 mod_note='Rule 5: OP did not comment, removed submission')
@@ -77,7 +77,7 @@ class SynthsRulesBot:
         for comment in bot_comments:
             if not comment.removed:
                 comment.mod.remove(mod_note='Rule 5: OP commented, removed warning')
-                self.log('No longer actionable. Cleaned up bot comments', submission)
+                self.log('Cleanup', submission)
 
     # 1. Not a self post
     # 2. Not locked
