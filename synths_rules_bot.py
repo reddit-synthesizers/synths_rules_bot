@@ -1,7 +1,6 @@
 import praw
 import datetime
 import os
-import threading
 
 from string import Template
 
@@ -34,20 +33,15 @@ class SynthsRulesBot:
                 return
 
             author_commented = self.did_author_comment(submission)
-            target = None
 
             if age >= MINUTES_TO_REMOVE and not author_commented:
-                target = self.remove_worker
+                self.remove(submission)   
             elif age >= MINUTES_TO_WARN and author_commented:
-                target = self.cleanup_worker
+                self.cleanup(submission)
             elif age >= MINUTES_TO_WARN and not author_commented:
-                target = self.warning_worker
+                self.warn(submission)
 
-            if target is not None:
-                thread = threading.Thread(target=target, args=(submission,))
-                thread.start()
-
-    def warning_worker(self, submission):
+    def warn(self, submission):
         if not self.has_bot_comment(submission):
             messaage = self.warning_template.substitute(
                 author=submission.author.name, minutes=MINUTES_TO_REMOVE)
@@ -58,7 +52,7 @@ class SynthsRulesBot:
 
             self.log('Warned', submission)
 
-    def remove_worker(self, submission):
+    def remove(self, submission):
         if self.get_unique_commenters_len(submission) >= MIN_COMMENTERS_TO_KEEP:
             self.log('Ignored', submission)
         else:
@@ -71,12 +65,13 @@ class SynthsRulesBot:
 
             self.log('Removed', submission)
 
-    def cleanup_worker(self, submission):
+    def cleanup(self, submission):
         bot_comments = self.find_bot_comments(submission)
 
         for comment in bot_comments:
             if not comment.removed:
-                comment.mod.remove(mod_note='Rule 5: OP commented, removed warning')
+                comment.mod.remove(
+                    mod_note='Rule 5: OP commented, removed warning')
                 self.log('Cleanup', submission)
 
     # 1. Not a self post
