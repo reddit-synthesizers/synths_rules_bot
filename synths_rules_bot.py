@@ -29,13 +29,13 @@ class SynthsRulesBot:
         if self.is_submission_actionable(submission):
             age = self.get_submission_age(submission)
 
-            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS: # optimization
+            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS:  # optimization
                 return
-
+                
             author_commented = self.did_author_comment(submission)
 
             if age >= MINUTES_TO_REMOVE and not author_commented:
-                self.remove(submission)   
+                self.remove(submission)
             elif age >= MINUTES_TO_WARN and author_commented:
                 self.cleanup(submission)
             elif age >= MINUTES_TO_WARN and not author_commented:
