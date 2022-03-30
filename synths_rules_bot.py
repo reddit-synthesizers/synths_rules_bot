@@ -45,7 +45,9 @@ class SynthsRulesBot:
                 self.warn(submission)
 
     def remove(self, submission):
-        if self.get_unique_commenters_len(submission) < MIN_UNIQUE_COMMENTERS_TO_KEEP:
+        unique_commentors = self.get_unique_commenters_len(submission)
+
+        if unique_commentors < MIN_UNIQUE_COMMENTERS_TO_KEEP:
             if not self.dry_run:
                 submission.mod.remove(
                     spam=False, mod_note='Rule 5: OP did not comment, removed submission')
@@ -115,7 +117,7 @@ class SynthsRulesBot:
     def find_warning_comment(self, submission):
         warning_comment = None
 
-        if submission.num_comments > 0:
+        if len(submission.comments) > 0:
             first_comment = submission.comments[0]
 
             if (first_comment.author.name == self.reddit.user.me() and first_comment.stickied):
@@ -139,7 +141,7 @@ class SynthsRulesBot:
         for comment in submission.comments:
             unique.add(comment.author)
 
-        return unique.__len__()
+        return len(unique)
 
     def read_text_file(self, filename):
         text = {}
