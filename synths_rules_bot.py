@@ -8,41 +8,66 @@ DEFAULT_SUBREDDIT_NAME = 'synthesizers'
 
 MINUTES_TO_WARN = 5  # number of minutes before warning the user
 MINUTES_TO_REMOVE = 60  # number of minutes before removing the post if the user has not commented
-MIN_COMMENTERS_TO_KEEP = 5  # number of unique commenters to keep the post if the user has not commented
+MIN_UNIQUE_COMMENTERS_TO_KEEP = 5  # number of unique commenters to keep the post if the user has not commented
 OLDEST_SUBMISSION_AGE_TO_PROCESS = 90  # depending on how often the bot runs, this can optimize the # of API calls
+MAX_SUBMISSIONS_TO_PROCESS = 25  # tweak depending on the subreddit's volume and how often the bot runs
 
 
 class SynthsRulesBot:
-    def __init__(self, subreddit_name=DEFAULT_SUBREDDIT_NAME):
-        self.warning_template = Template(
-            self.read_text_file('rule5-warning.txt'))
-        self.removal_template = Template(
-            self.read_text_file('rule5-removal.txt'))
+    def __init__(self, subreddit_name=DEFAULT_SUBREDDIT_NAME, dry_run=False):
+        self.dry_run = dry_run
 
         self.reddit = praw.Reddit('SynthRulesBot')
         subreddit = self.reddit.subreddit(subreddit_name)
 
-        for submission in subreddit.new(limit=25):
-            self.process_submission(submission)
+        self.warning_template = Template(
+            self.read_text_file('rule5-warning.txt'))
+
+        self.removal_template = Template(
+            self.read_text_file('rule5-removal.txt'))
+
+        for submission in subreddit.new(limit=MAX_SUBMISSIONS_TO_PROCESS):
+            if self.submission_is_actionable(submission):
+                self.process_submission(submission)
 
     def process_submission(self, submission):
-        if self.is_submission_actionable(submission):
-            age = self.get_submission_age(submission)
+        age = self.get_submission_age(submission)
 
-            if age > OLDEST_SUBMISSION_AGE_TO_PROCESS:  # optimization
-                return
-                
+        if age <= OLDEST_SUBMISSION_AGE_TO_PROCESS:
             author_commented = self.did_author_comment(submission)
+            was_warned = self.was_warned(submission)
 
             if age >= MINUTES_TO_REMOVE and not author_commented:
                 self.remove(submission)
-            elif age >= MINUTES_TO_WARN and author_commented:
+            elif age >= MINUTES_TO_WARN and author_commented and was_warned:
                 self.cleanup(submission)
-            elif age >= MINUTES_TO_WARN and not author_commented:
+            elif age >= MINUTES_TO_WARN and not author_commented and not was_warned:
                 self.warn(submission)
 
+    def remove(self, submission):
+        if self.get_unique_commenters_len(submission) < MIN_UNIQUE_COMMENTERS_TO_KEEP:
+            if not self.dry_run:
+                submission.mod.remove(
+                    spam=False, mod_note='Rule 5: OP did not comment, removed submission')
+
+                message = self.removal_template.substitute(
+                    author=submission.author.name, minutes=MINUTES_TO_REMOVE)
+                submission.mod.send_removal_message(message)
+
+            self.log('Removed', submission)
+        else:
+            submission.mod.approve()
+            self.log('Ignored', submission)
+
+    def cleanup(self, submission):
+        if not self.dry_run:
+            self.remove_warning_comment(
+                submission, 'Rule 5: OP commented, removed warning')
+
+        self.log('Cleanup', submission)
+
     def warn(self, submission):
-        if not self.has_bot_comment(submission):
+        if not self.dry_run:
             messaage = self.warning_template.substitute(
                 author=submission.author.name, minutes=MINUTES_TO_REMOVE)
 
@@ -50,43 +75,20 @@ class SynthsRulesBot:
             bot_comment.mod.distinguish(sticky=True)
             bot_comment.mod.ignore_reports()
 
-            self.log('Warned', submission)
-
-    def remove(self, submission):
-        if self.get_unique_commenters_len(submission) >= MIN_COMMENTERS_TO_KEEP:
-            self.log('Ignored', submission)
-        else:
-            submission.mod.remove(
-                mod_note='Rule 5: OP did not comment, removed submission')
-
-            message = self.removal_template.substitute(
-                author=submission.author.name, minutes=MINUTES_TO_REMOVE)
-            submission.mod.send_removal_message(message)
-
-            self.log('Removed', submission)
-
-    def cleanup(self, submission):
-        bot_comments = self.find_bot_comments(submission)
-
-        for comment in bot_comments:
-            if not comment.removed:
-                comment.mod.remove(
-                    mod_note='Rule 5: OP commented, removed warning')
-                self.log('Cleanup', submission)
+        self.log('Warned', submission)
 
     # 1. Not a self post
     # 2. Not locked
     # 3. Not distingushed
     # 4. Not created by AutoModerator
-    def is_submission_actionable(self, submission):
+    def submission_is_actionable(self, submission):
         return (not submission.is_self
                 and not submission.approved
                 and not submission.locked
                 and not submission.distinguished
                 and not submission.author.name == 'AutoModerator')
 
-    # returns submission age in minutes
-    # why does PRAW use local time for UTC?
+    # Returns submission age in minutes
     def get_submission_age(self, submission):
         now = datetime.datetime.now()
         created = datetime.datetime.fromtimestamp(submission.created_utc)
@@ -107,19 +109,28 @@ class SynthsRulesBot:
 
         return author_commented
 
-    # Find the bot's moderation comment
-    def find_bot_comments(self, submission):
-        bot_comments = list()
+    def was_warned(self, submission):
+        return self.find_warning_comment(submission) is not None
 
-        submission.comments.replace_more(limit=None)
-        for comment in submission.comments:
-            if comment.author.name == self.reddit.user.me():
-                bot_comments.append(comment)
+    def find_warning_comment(self, submission):
+        warning_comment = None
 
-        return bot_comments
+        if submission.num_comments > 0:
+            first_comment = submission.comments[0]
 
-    def has_bot_comment(self, submission):
-        return self.find_bot_comments(submission).__len__() > 0
+            if (first_comment.author.name == self.reddit.user.me() and first_comment.stickied):
+                message = self.warning_template.substitute(
+                    author=submission.author.name, minutes=MINUTES_TO_REMOVE)
+
+                if first_comment.body.startswith(message[:10]):  # avoid removing our other bot's warnings
+                    warning_comment = first_comment
+
+        return warning_comment
+
+    def remove_warning_comment(self, submission, mod_note=''):
+        warning_comment = self.find_warning_comment(submission)
+        if warning_comment is not None:
+            warning_comment.mod.remove(spam=False, mod_note=mod_note)
 
     def get_unique_commenters_len(self, submission):
         unique = set()
@@ -145,10 +156,11 @@ class SynthsRulesBot:
         print(f'[{name}][{now}] {action}: \'{submission.title}\' ({submission.id})')
 
 
-if __name__ == '__main__':
-    SynthsRulesBot()
-
-
-def lambda_handler(event, context):
+def lambda_handler(event=None, context=None):
     subreddit_name = os.environ['subreddit_name'] if 'subreddit_name' in os.environ else DEFAULT_SUBREDDIT_NAME
-    SynthsRulesBot(subreddit_name=subreddit_name)
+    dry_run = os.environ['dry_run'] == 'True' if 'dry_run' in os.environ else False
+    SynthsRulesBot(subreddit_name=subreddit_name, dry_run=dry_run)
+
+
+if __name__ == '__main__':
+    lambda_handler()
