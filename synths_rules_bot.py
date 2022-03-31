@@ -49,6 +49,8 @@ class SynthsRulesBot:
 
         if unique_commentors < MIN_UNIQUE_COMMENTERS_TO_KEEP:
             if not self.dry_run:
+                self.remove_warning_comment(submission, 'Submission removed')
+
                 submission.mod.remove(
                     spam=False, mod_note='Rule 5: OP did not comment, removed submission')
 
@@ -75,6 +77,7 @@ class SynthsRulesBot:
 
             bot_comment = submission.reply(messaage)
             bot_comment.mod.distinguish(sticky=True)
+            bot_comment.mod.lock()
             bot_comment.mod.ignore_reports()
 
         self.log('Warned', submission)
@@ -102,9 +105,8 @@ class SynthsRulesBot:
         author_commented = False
 
         submission.comments.replace_more(limit=None)
-        flattened_comments = submission.comments.list()
 
-        for comment in flattened_comments:
+        for comment in submission.comments.list():
             if comment.is_submitter:
                 author_commented = True
                 break
@@ -138,7 +140,8 @@ class SynthsRulesBot:
         unique = set()
 
         submission.comments.replace_more(limit=None)
-        for comment in submission.comments:
+
+        for comment in submission.comments.list():
             unique.add(comment.author)
 
         return len(unique)
