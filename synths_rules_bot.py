@@ -1,8 +1,7 @@
-import praw
+from string import Template
 import datetime
 import os
-
-from string import Template
+import praw
 
 DEFAULT_SUBREDDIT_NAME = 'synthesizers'
 
@@ -18,7 +17,7 @@ class SynthsRulesBot:
         self.dry_run = dry_run
 
         self.reddit = praw.Reddit('SynthRulesBot')
-        subreddit = self.reddit.subreddit(subreddit_name)
+        self.subreddit = self.reddit.subreddit(subreddit_name)
 
         self.warning_template = Template(
             self.read_text_file('rule5-warning.txt'))
@@ -26,8 +25,9 @@ class SynthsRulesBot:
         self.removal_template = Template(
             self.read_text_file('rule5-removal.txt'))
 
-        for submission in subreddit.new(limit=MAX_SUBMISSIONS_TO_PROCESS):
-            if self.submission_is_actionable(submission):
+    def scan(self):
+        for submission in self.subreddit.new(limit=MAX_SUBMISSIONS_TO_PROCESS):
+            if self.is_submission_actionable(submission):
                 self.process_submission(submission)
 
     def process_submission(self, submission):
@@ -82,37 +82,6 @@ class SynthsRulesBot:
 
         self.log('Warned', submission)
 
-    # 1. Not a self post
-    # 2. Not locked
-    # 3. Not distingushed
-    # 4. Not created by AutoModerator
-    def submission_is_actionable(self, submission):
-        return (not submission.is_self
-                and not submission.approved
-                and not submission.locked
-                and not submission.distinguished
-                and not submission.author.name == 'AutoModerator')
-
-    # Returns submission age in minutes
-    def get_submission_age(self, submission):
-        now = datetime.datetime.now()
-        created = datetime.datetime.fromtimestamp(submission.created_utc)
-        age = now - created
-        return age.total_seconds() / 60
-
-    # Did the OP leave a comment to the thread?
-    def did_author_comment(self, submission):
-        author_commented = False
-
-        submission.comments.replace_more(limit=None)
-
-        for comment in submission.comments.list():
-            if comment.is_submitter:
-                author_commented = True
-                break
-
-        return author_commented
-
     def was_warned(self, submission):
         return self.find_warning_comment(submission) is not None
 
@@ -134,9 +103,46 @@ class SynthsRulesBot:
     def remove_warning_comment(self, submission, mod_note=''):
         warning_comment = self.find_warning_comment(submission)
         if warning_comment is not None:
+            warning_comment.mod.unlock()
             warning_comment.mod.remove(spam=False, mod_note=mod_note)
 
-    def get_unique_commenters_len(self, submission):
+    # 1. Not a self post
+    # 2. Not locked
+    # 3. Not distingushed
+    # 4. Not created by AutoModerator
+    @staticmethod
+    def is_submission_actionable(submission):
+        return (not submission.is_self
+                and not submission.approved
+                and not submission.locked
+                and not submission.distinguished
+                and not submission.author.name == 'AutoModerator')
+
+    # Returns submission age in minutes
+    @staticmethod
+    def get_submission_age(submission):
+        now = datetime.datetime.now()
+        created = datetime.datetime.fromtimestamp(submission.created_utc)
+        age = now - created
+
+        return age.total_seconds() / 60
+
+    # Did the OP leave a comment to the thread?
+    @staticmethod
+    def did_author_comment(submission):
+        author_commented = False
+
+        submission.comments.replace_more(limit=None)
+
+        for comment in submission.comments.list():
+            if comment.is_submitter:
+                author_commented = True
+                break
+
+        return author_commented
+
+    @staticmethod
+    def get_unique_commenters_len(submission):
         unique = set()
 
         submission.comments.replace_more(limit=None)
@@ -146,12 +152,10 @@ class SynthsRulesBot:
 
         return len(unique)
 
-    def read_text_file(self, filename):
-        text = {}
-
-        file = open(filename, 'r')
-        text = file.read()
-        file.close()
+    @staticmethod
+    def read_text_file(filename):
+        with open(filename, encoding='utf-8') as file:
+            text = file.read()
 
         return text
 
@@ -164,7 +168,8 @@ class SynthsRulesBot:
 def lambda_handler(event=None, context=None):
     subreddit_name = os.environ['subreddit_name'] if 'subreddit_name' in os.environ else DEFAULT_SUBREDDIT_NAME
     dry_run = os.environ['dry_run'] == 'True' if 'dry_run' in os.environ else False
-    SynthsRulesBot(subreddit_name=subreddit_name, dry_run=dry_run)
+    rules_bot = SynthsRulesBot(subreddit_name=subreddit_name, dry_run=dry_run)
+    rules_bot.scan()
 
 
 if __name__ == '__main__':
