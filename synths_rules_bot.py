@@ -7,7 +7,7 @@ DEFAULT_SUBREDDIT_NAME = 'synthesizers'
 
 MINUTES_TO_WARN = 5  # number of minutes before warning the user
 MINUTES_TO_REMOVE = 60  # number of minutes before removing the post if the user has not commented
-MIN_UNIQUE_COMMENTERS_TO_KEEP = 5  # number of unique commenters to keep the post if the user has not commented
+MIN_UNIQUE_COMMENTERS_TO_KEEP = 10  # number of unique commenters to keep the post if the user has not commented
 OLDEST_SUBMISSION_AGE_TO_PROCESS = 90  # depending on how often the bot runs, this can optimize the # of API calls
 MAX_SUBMISSIONS_TO_PROCESS = 25  # tweak depending on the subreddit's volume and how often the bot runs
 
@@ -45,9 +45,9 @@ class SynthsRulesBot:
                 self.warn(submission)
 
     def remove(self, submission):
-        unique_commentors = self.get_unique_commenters_len(submission)
+        unique_commentors = self.get_unique_commenters(submission)
 
-        if unique_commentors < MIN_UNIQUE_COMMENTERS_TO_KEEP:
+        if len(unique_commentors) < MIN_UNIQUE_COMMENTERS_TO_KEEP:
             if not self.dry_run:
                 self.remove_warning_comment(submission, 'Submission removed')
 
@@ -61,6 +61,8 @@ class SynthsRulesBot:
             self.log('Removed', submission)
         else:
             submission.mod.approve()
+            self.remove_warning_comment(
+                submission, mod_note='OP did not comment but submission is engaging. Keeping.')
             self.log('Ignored', submission)
 
     def cleanup(self, submission):
@@ -91,7 +93,10 @@ class SynthsRulesBot:
         if len(submission.comments) > 0:
             first_comment = submission.comments[0]
 
-            if (first_comment.author.name == self.reddit.user.me() and first_comment.stickied):
+            if (first_comment.author is not None
+                    and first_comment.author.name == self.reddit.config.username
+                    and first_comment.stickied):
+
                 message = self.warning_template.substitute(
                     author=submission.author.name, minutes=MINUTES_TO_REMOVE)
 
@@ -142,7 +147,7 @@ class SynthsRulesBot:
         return author_commented
 
     @staticmethod
-    def get_unique_commenters_len(submission):
+    def get_unique_commenters(submission):
         unique = set()
 
         submission.comments.replace_more(limit=None)
@@ -150,7 +155,7 @@ class SynthsRulesBot:
         for comment in submission.comments.list():
             unique.add(comment.author)
 
-        return len(unique)
+        return unique
 
     @staticmethod
     def read_text_file(filename):
@@ -160,9 +165,10 @@ class SynthsRulesBot:
         return text
 
     def log(self, action, submission):
+        is_dry_run = '*' if self.dry_run is True else ''
         now = datetime.datetime.now()
         name = type(self).__name__
-        print(f'[{name}][{now}] {action}: \'{submission.title}\' ({submission.id})')
+        print(f'{is_dry_run}[{name}][{now}] {action}: \'{submission.title}\' ({submission.id})')
 
 
 def lambda_handler(event=None, context=None):
