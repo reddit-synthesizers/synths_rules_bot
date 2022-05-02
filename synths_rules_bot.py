@@ -1,6 +1,7 @@
-from string import Template
 import datetime
 import os
+from string import Template
+
 import praw
 
 DEFAULT_SUBREDDIT_NAME = 'synthesizers'
@@ -130,7 +131,7 @@ class SynthsRulesBot:
         created = datetime.datetime.fromtimestamp(submission.created_utc)
         age = now - created
 
-        return age.total_seconds() / 60
+        return int(age.total_seconds() / 60)
 
     # Did the OP leave a comment to the thread?
     @staticmethod
