@@ -5,6 +5,7 @@ from string import Template
 import praw
 
 DEFAULT_SUBREDDIT_NAME = 'synthesizers'
+REMOVAL_REASON_ID = '93f74a99-8ef2-4463-9c53-413c733184a8'
 
 MINUTES_TO_WARN = 5  # number of minutes before warning the user
 MINUTES_TO_REMOVE = 60  # number of minutes before removing the post if the user has not commented
@@ -53,7 +54,9 @@ class SynthsRulesBot:
                 self.remove_warning_comment(submission, 'Submission removed')
 
                 submission.mod.remove(
-                    spam=False, mod_note='Rule 5: OP did not comment, removed submission')
+                    mod_note='Rule 5: OP did not comment, removed submission',
+                    spam=False,
+                    reason_id=REMOVAL_REASON_ID)
 
                 message = self.removal_template.substitute(
                     author=submission.author.name, minutes=MINUTES_TO_REMOVE)
@@ -138,12 +141,15 @@ class SynthsRulesBot:
     def did_author_comment(submission):
         author_commented = False
 
-        submission.comments.replace_more(limit=None)
+        if submission.selftext is not None and len(submission.selftext) > 0:
+            author_commented = True
+        else:
+            submission.comments.replace_more(limit=None)
 
-        for comment in submission.comments.list():
-            if comment.is_submitter:
-                author_commented = True
-                break
+            for comment in submission.comments.list():
+                if comment.is_submitter:
+                    author_commented = True
+                    break
 
         return author_commented
 
