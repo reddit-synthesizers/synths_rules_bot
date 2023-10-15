@@ -1,5 +1,6 @@
 import datetime
 import os
+import time
 from string import Template
 
 import praw
@@ -15,17 +16,17 @@ MAX_SUBMISSIONS_TO_PROCESS = 25  # tweak depending on the subreddit's volume and
 
 
 class SynthsRulesBot:
-    def __init__(self, subreddit_name=DEFAULT_SUBREDDIT_NAME, dry_run=False):
+    def __init__(self, subreddit_name=DEFAULT_SUBREDDIT_NAME, dry_run=False, reddit=None):
         self.dry_run = dry_run
 
-        self.reddit = praw.Reddit('SynthRulesBot')
+        self.reddit = reddit if reddit else praw.Reddit('SynthRulesBot')
         self.subreddit = self.reddit.subreddit(subreddit_name)
 
         self.warning_template = Template(
-            self.read_text_file('rule5-warning.txt'))
+            self.read_text_file('data/synths_rules_bot/rule5-warning.txt'))
 
         self.removal_template = Template(
-            self.read_text_file('rule5-removal.txt'))
+            self.read_text_file('data/synths_rules_bot/rule5-removal.txt'))
 
     def scan(self):
         for submission in self.subreddit.new(limit=MAX_SUBMISSIONS_TO_PROCESS):
@@ -120,20 +121,22 @@ class SynthsRulesBot:
     # 4. Not created by AutoModerator
     @staticmethod
     def is_submission_actionable(submission):
-        return not (submission.is_self
-                    or submission.approved
-                    or submission.locked
-                    or submission.distinguished
-                    or submission.author.name == 'AutoModerator')
+        return not (
+            submission.is_self or
+            submission.approved or
+            submission.locked or
+            submission.distinguished or
+            submission.author is None or
+            submission.author.name == 'AutoModerator'
+        )
 
     # Returns submission age in minutes
     @staticmethod
     def get_submission_age(submission):
-        now = datetime.datetime.now()
-        created = datetime.datetime.fromtimestamp(submission.created_utc)
-        age = now - created
+        now = time.time()
+        age = now - submission.created_utc
 
-        return int(age.total_seconds() / 60)
+        return int(age / 60)
 
     # Did the OP leave a comment to the thread?
     @staticmethod
@@ -167,7 +170,6 @@ class SynthsRulesBot:
     def read_text_file(filename):
         with open(filename, encoding='utf-8') as file:
             text = file.read()
-
         return text
 
     def log(self, action, submission):
